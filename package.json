@@ -1,9 +1,8 @@
 {
   "name": "the-blind-museum",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "proxy": "http://localhost:3001",
-  "homepage": "https://yogurtandjam.github.io/the-blind-museum",
+  "homepage": ".",
   "dependencies": {
     "@tensorflow-models/face-detection": "1.0.1",
     "@tensorflow-models/face-landmarks-detection": "1.0.2",
