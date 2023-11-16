@@ -17,17 +17,30 @@ type TArtPieces = TArtPiece[];
 
 const MAX_WIDTH = 500;
 
-const search = async (q: string) => {
-  const res = await fetch(`${SEARCH_URL}?q=${q}`);
-  const artworkIds: TArtworkIds = await res.json();
+const FETCH_QUANTITY = 5;
 
-  console.log({ artworkIds });
+const EMPTRY_RESULT: string[] = [];
 
+// Search for objectIDs
+const searchObjectIDs = async (q: string) => {
+  const res = await fetch(`${SEARCH_URL}?q=${q}&hasImages=true`);
+  const response: TArtworkIds = await res.json();
+
+  console.log({ response });
+
+  return response.objectIDs ?? EMPTRY_RESULT;
+};
+
+// Fetch artworks data from the objectIDs
+const fetchArtworks = async (objectIDs: string[]) => {
   const responses = await Promise.all(
-    (artworkIds.objectIDs || [])
-      .slice(0, 10)
-      .map((id) => fetch(`${OBJ_URL}/${id}`).then((res) => res.json()))
+    objectIDs.map(async (id) => {
+      const res = await fetch(`${OBJ_URL}/${id}`);
+      const artworks = await res.json();
+      return artworks;
+    })
   );
+  console.log({ responses });
 
   const validObjs = responses.filter(
     (res) => res.objectID && res.primaryImageSmall
@@ -36,26 +49,54 @@ const search = async (q: string) => {
 };
 
 export const Search = ({ eyesClosed }: { eyesClosed: boolean }) => {
-  const [query, setQuery] = useState("");
-  const [art, setArt] = useState<TArtPieces | []>([]);
+  const [query, setQuery] = useState("flowers");
+  const [objectIDs, setObjectIDs] = useState<string[]>([]);
+  const [artworks, setArtworks] = useState<TArtPieces | []>([]);
+  const [artworkIndex, setArtworkIndex] = useState<number>(-1);
 
-  const debouncedFetch = useCallback(
-    debounce((q) => search(q).then((res) => setArt(res as TArtPieces)), 500),
+  const debouncedFetchObjectIDs = useCallback(
+    debounce((q) => searchObjectIDs(q).then((res) => setObjectIDs(res)), 500),
     []
   );
 
+  // Find new objectIDs when the search query changes
   useEffect(() => {
     if (query.length > 0) {
-      debouncedFetch(query);
+      debouncedFetchObjectIDs(query);
     }
   }, [query]);
 
+  // Fetch artworks data when the objectIDs change
   useEffect(() => {
-    console.log({ art });
-  }, [art]);
+    // If the index is close to the end of the artworks, fetch more
+    if (artworks.length - artworkIndex < FETCH_QUANTITY - 1) {
+      const objectsToFetch = objectIDs.slice(
+        artworks.length,
+        artworks.length + FETCH_QUANTITY
+      );
+      fetchArtworks(objectsToFetch).then((res) => {
+        setArtworks((artworks) => [...artworks, ...res]);
+      });
+    }
+  }, [objectIDs, artworks.length, artworkIndex]);
+
+  // Increment the artwork index each time the eyes open
+  useEffect(() => {
+    if (!eyesClosed) {
+      setArtworkIndex((prev) => prev + 1);
+    }
+  }, [eyesClosed]);
+
+  // Log the artworks when they change
+  useEffect(() => {
+    console.log({ artworks });
+  }, [artworks]);
+
   const handleChangeQuery = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => setQuery(e.target.value);
+
+  const artwork = artworks[artworkIndex % artworks.length];
 
   return (
     <>
@@ -79,9 +120,7 @@ export const Search = ({ eyesClosed }: { eyesClosed: boolean }) => {
         </ParagraphLarge>
       )}
       <div style={{ visibility: eyesClosed ? "visible" : "hidden" }}>
-        {art.map((artPiece) => (
-          <Image key={artPiece.objectID} src={artPiece.primaryImageSmall} />
-        ))}
+        {artwork && <Image src={artwork.primaryImageSmall} />}
       </div>
     </>
   );
